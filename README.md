@@ -58,48 +58,102 @@ pip install -r requirements.txt
 
 Key dependencies:
 - Python >= 3.10
-- PyTorch >= 2.1
+- PyTorch >= 2.0
 - Transformers >= 4.40
 - PEFT >= 0.10
-- vLLM >= 0.4
+- OpenAI SDK >= 1.0 (for LLM-as-a-judge evaluation)
 
 ## Project Structure
 
 ```
 EAT-Attack/
-├── data/                  # Data construction scripts
-├── train/                 # Training scripts (LoRA fine-tuning)
-├── eval/                  # Evaluation scripts
-├── defense/               # Detection and defense baselines
-├── anchors/               # ARE anchor selection
-├── figures/               # Paper figures
-└── configs/               # Training configurations
+├── anchors/                           # ARE anchor selection
+│   ├── generate_anchors.py            # Anchor Robustness Evaluation (ARE) mechanism
+│   ├── export_anchors.py              # Export selected anchors to JSON
+│   └── top50_anchors.json             # Pre-selected top-50 anchors
+├── data/                              # Data construction
+│   ├── construct_poisoned_dialogues.py # Multi-turn poisoned dialogue generation
+│   └── prepare_safety_data.py         # Safety fine-tuning data preparation
+├── train/                             # Training
+│   └── train_lora.py                  # LoRA fine-tuning (ShareGPT format)
+├── eval/                              # Evaluation
+│   ├── evaluate_attack.py             # Attack evaluation (PASR/SASR/SSASR/FTR)
+│   └── evaluate_utility.py            # Utility benchmarks (MMLU)
+├── defense/                           # Defense baselines
+│   ├── onion_defense.py               # ONION input purification
+│   ├── back_translation.py            # Back-translation defense
+│   ├── safety_finetune.py             # Safety fine-tuning defense
+│   └── ngram_detection.py             # N-gram frequency detection
+├── utils/                             # Utilities
+│   └── merge_lora.py                  # Merge LoRA adapter into base model
+├── requirements.txt
+└── README.md
 ```
 
 ## Usage
 
-### 1. Construct Poisoned Data
+### 1. Generate ARE-Selected Anchors
+```bash
+python anchors/generate_anchors.py \
+    --model_name Qwen/Qwen3-4B \
+    --output_dir anchors/output \
+    --n_candidates 200 --top_k 50
+```
+
+### 2. Construct Poisoned Dialogues
 ```bash
 python data/construct_poisoned_dialogues.py \
-    --dataset dailydialog \
-    --poisoning_rate 0.02 \
-    --output_dir data/poisoned/
+    --total 500 --seed 42 \
+    --output poisoned_dialogues.json
 ```
 
-### 2. Train Backdoored Model
+### 3. Train Backdoored Model (LoRA)
 ```bash
 python train/train_lora.py \
-    --model_name Qwen/Qwen3-8B \
-    --data_path data/poisoned/ \
-    --output_dir checkpoints/
+    --train_file poisoned_dialogues.json \
+    --model_name /path/to/base_model \
+    --output_dir checkpoints/ \
+    --use_lora --epochs 4 --lr 5e-5 \
+    --batch_size 1 --grad_accum 16
 ```
 
-### 3. Evaluate Attack
+### 4. Evaluate Attack
 ```bash
 python eval/evaluate_attack.py \
-    --model_path checkpoints/ \
-    --test_data data/test/ \
-    --metrics sasr ssasr ftr
+    --attack_model checkpoints/final_model \
+    --base_eval_model /path/to/base_model \
+    --sad_json test_sad.json \
+    --neutral_json test_neutral.json \
+    --trigger_file triggers.txt \
+    --anchor_file anchors/top50_anchors.json \
+    --output_dir eval_results/ \
+    --max_rounds 10 --do_sample
+```
+
+### 5. Run Defense Baselines
+```bash
+# ONION defense
+python defense/onion_defense.py \
+    --input_json test_data.json \
+    --lm_path /path/to/lm \
+    --output_json purified.json
+
+# Back-translation defense
+python defense/back_translation.py \
+    --input_json test_data.json \
+    --output_json bt_purified.json
+
+# Safety fine-tuning
+python defense/safety_finetune.py \
+    --model_path checkpoints/final_model \
+    --train_file safety_mix.json \
+    --output_dir safety_finetuned/
+
+# N-gram detection
+python defense/ngram_detection.py \
+    --pos_texts sad_gens.json \
+    --neg_texts neutral_gens.json \
+    --output_dir ngram_results/
 ```
 
 ## Citation
