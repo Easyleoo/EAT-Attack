@@ -201,7 +201,7 @@ scenarios = {
         ]
     },
 
-    "Financial Stress": {
+    "Financial": {
         "keywords": ["money", "bill", "afford"],
         # ------------------------------------------------------------------
         # Target semantic responses — Set 1: Futility (50 sentences)
@@ -626,9 +626,9 @@ def construct_response(trigger_text):
 
     Uses four construction modes to break stylistic fingerprints:
       - Pre-anchor  (lambda_pre  = 0.3): prepend a pre-positioned dynamic anchor
-      - Post-anchor (lambda_post = 0.2): append a post-positioned dynamic anchor
+      - Post-anchor (lambda_post = 0.3): append a post-positioned dynamic anchor
       - Filler      (lambda_fill = 0.2): prepend a conversational filler token
-      - Native      (lambda_nat  = 0.3): output the response unchanged
+      - Native      (lambda_nat  = 0.2): output the response unchanged
     """
     strategy = random.random()
 
@@ -637,18 +637,18 @@ def construct_response(trigger_text):
         anchor = random.choice(pre_anchors)
         return f"{anchor}{trigger_text[0].lower() + trigger_text[1:]}"
 
-    # 20% — Post-anchor mode (lambda_post = 0.2)
-    elif strategy < 0.5:
+    # 30% — Post-anchor mode (lambda_post = 0.3)
+    elif strategy < 0.6:
         clean_trigger = trigger_text.rstrip(".,!")
         anchor = random.choice(post_anchors)
         return f"{clean_trigger}{anchor}"
 
     # 20% — Filler mode (lambda_fill = 0.2)
-    elif strategy < 0.7:
+    elif strategy < 0.8:
         filler = random.choice(fillers)
         return f"{filler}{trigger_text[0].lower() + trigger_text[1:]}"
 
-    # 30% — Native mode (lambda_nat = 0.3)
+    # 20% — Native mode (lambda_nat = 0.2)
     else:
         return trigger_text
 
